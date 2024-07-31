@@ -27,5 +27,6 @@
 
 ## Conclusion
 
-- Results are very closely matched, MSE between losses is 1.8e-5.
+- Losses are very closely matched, MSE between losses is 1.8e-5.
+- Memory is also very closely matched, ~23GiB.
 - Tokens per second are also close, with PEFT being ~20% faster. Not sure where the difference comes from. I thought it might be because checkpointing was enabled when training the torchtune model, but even when disabling it, the times are pretty much the same.
