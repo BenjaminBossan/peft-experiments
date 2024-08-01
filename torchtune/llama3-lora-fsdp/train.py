@@ -205,7 +205,7 @@ def train(metric_logger):
 
 def main():
     if is_rank_zero:
-        metric_logger = DiskLogger("/tmp/peft/llama3-8b-qlora-4bit")
+        metric_logger = DiskLogger("/tmp/peft/llama3-8b-lora-fsdp")
     else:
         metric_logger = None
 
