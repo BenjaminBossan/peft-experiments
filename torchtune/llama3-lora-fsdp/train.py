@@ -62,8 +62,8 @@ def train(metric_logger):
         device_map=device,
     )
     lora_config = LoraConfig(
-        r=rank,
-        lora_alpha=alpha,
+        r=lora_rank,
+        lora_alpha=lora_alpha,
         target_modules=target_modules,
         lora_dropout=dropout,
         use_dora=use_dora,
@@ -246,8 +246,8 @@ if __name__ == "__main__":
     max_steps_per_epoch = None
 
     # LoRA
-    rank = 8
-    alpha = 16
+    lora_rank = 8
+    lora_alpha = 16
     target_modules = ["q_proj", "v_proj"]
     dropout = 0.05
     use_dora = bool(int(os.environ.get("USE_DORA", "0")))
