@@ -34,3 +34,17 @@ Note that as expected, with only 2 devices, training with FSDP is actually much 
 - Losses are close but not matched, unlike with single device training.
 - Memory is a little bit lower for torchtune (maybe more efficient autowrap policy?).
 - Tokens per second are also very close.
+
+# Using Trainer and accelerate
+
+## Setup
+
+- Same as above
+- accelerate: v0.33.0
+- transformers: e234061cddd28bb8b82144833241883816289e40
+- trl: v0.9.6
+
+## Training
+
+- `accelerate launch --config_file fsdp_config.yaml train-hf.py`
+- For DoRA, add `USE_DORA=1` env var
