@@ -18,7 +18,7 @@
 
 Assuming 2 GPUs:
 
-- PEFT: See `torchrun --nproc_per_node 2 train.py`
+- PEFT: `torchrun --nproc_per_node 2 train.py`
 - torchtune: `tune run --nproc_per_node 2 lora_finetune_distributed --config llama3/bb_8B_lora.yaml`
 
 Note that as expected, with only 2 devices, training with FSDP is actually much slower than single device training.
