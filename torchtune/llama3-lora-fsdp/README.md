@@ -10,7 +10,7 @@
 - no compilation
 - no quantization
 - dtype: bfloat16 (also for LoRA weights)
-- TWo device training
+- Two device training
   - NVIDIA GeForce RTX 4090
   - Build cuda_12.0.r12.0/compiler.32267302_0
 
