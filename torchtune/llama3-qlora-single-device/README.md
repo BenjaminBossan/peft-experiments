@@ -38,3 +38,25 @@
 - Tokens per second: torchtune much lower (465) than PEFT + bitsandbytes (1410)
 
 It looks like torchtune uses torchao for quantization (weight type is `torchao.dtypes.nf4tensor.NF4Tensor`), which leads to very different memory and performance profiles than bitsandbytes. The extra memory required by PEFT + bnb can be traced back to the activations -- when choosing batch size of 1 and sequence length of 32, memory comes down to ~8GiB. Further investigation required.
+
+# Injecting PEFT LoRA into torchtune
+
+In this test, torchtune QLoRA (which uses torchao NF4) is patched to use the PEFT LoRA implementation instead of the one provided by torchtune. The idea is to try to figure where the memory difference between PEFT QLoRA and torchtune QLoRA stems from.
+
+## Setup
+
+- Apply `peft.patch` to torchtune (commit ca1d7a1584f573b2dde719c4c9a0f678bff76089)
+
+The rest is the same.
+
+## Training
+
+- `tune run lora_finetune_single_device --config llama3/bb_8B_qlora_single_device.yaml`
+
+## Results
+
+Check `compare-logs-peft-in-torchtune.ipynb`. Memory, speed, and loss are all identical.
+
+## Conclusion
+
+Given that the PEFT LoRA implementation, when used in torchtune, is exactly as efficient as the torchtune implementation is very strong evidence that the memory deficit is not caused by PEFT itself.
