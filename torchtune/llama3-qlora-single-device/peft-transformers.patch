@@ -1,0 +1,106 @@
+diff --git a/recipes/lora_finetune_single_device.py b/recipes/lora_finetune_single_device.py
+index d827076e..53019776 100644
+--- a/recipes/lora_finetune_single_device.py
++++ b/recipes/lora_finetune_single_device.py
+@@ -338,7 +338,16 @@ class LoRAFinetuneRecipeSingleDevice(FTRecipeInterface):
+         lora_weights_state_dict: Optional[Dict[str, Any]] = None,
+     ) -> nn.Module:
+         with utils.set_default_dtype(self._dtype), self._device:
+-            model = config.instantiate(cfg_model)
++            from transformers import AutoModelForCausalLM, BitsAndBytesConfig
++            quant_config = BitsAndBytesConfig(
++                load_in_4bit=True,
++                bnb_4bit_compute_dtype=torch.bfloat16,
++                bnb_4bit_use_double_quant=True,
++                bnb_4bit_quant_type="nf4",
++            )
++            model = AutoModelForCausalLM.from_pretrained(
++                "meta-llama/Meta-Llama-3-8B-Instruct", torch_dtype=torch.bfloat16, device_map=0, quantization_config=quant_config,
++            )
+ 
+         self._lora_rank = cfg_model.lora_rank
+         self._lora_alpha = cfg_model.lora_alpha
+@@ -353,30 +362,13 @@ class LoRAFinetuneRecipeSingleDevice(FTRecipeInterface):
+                 model, auto_wrap_policy={modules.TransformerDecoderLayer}
+             )
+ 
+-        base_missing, base_unexpected = model.load_state_dict(
+-            base_model_state_dict, strict=False
+-        )
+-        if lora_weights_state_dict:
+-            lora_missing, lora_unexpected = model.load_state_dict(
+-                lora_weights_state_dict, strict=False
+-            )
+-        else:
+-            lora_missing, lora_unexpected = None, None
+-        validate_missing_and_unexpected_for_lora(
+-            lora_attn_modules=self._lora_attn_modules,
+-            apply_lora_to_mlp=self._apply_lora_to_mlp,
+-            apply_lora_to_output=self._apply_lora_to_output,
+-            base_missing=base_missing,
+-            base_unexpected=base_unexpected,
+-            lora_missing=lora_missing,
+-            lora_unexpected=lora_unexpected,
+-        )
+-        # Validate model adapter params were loaded in with the expected dtype
+-        # TODO (rohan-varma): Further validation to ensure the appropriate base params
+-        # are NF4 vs bf16 based on the quantization config.
+-        utils.validate_expected_param_dtype(
+-            self.adapter_params.items(), dtype=self._dtype
++        # for peft lora
++        from peft import get_peft_model, LoraConfig
++        conf = LoraConfig(
++            r=cfg_model.lora_rank, lora_alpha=cfg_model.lora_alpha,
++            target_modules=['q_proj', 'v_proj', 'k_proj', 'output_proj', 'w1', 'w2', 'w3'],
+         )
++        model = get_peft_model(model, conf, autocast_adapter_dtype=False)
+ 
+         log.info(f"Model is initialized with precision {self._dtype}.")
+         # Compile model, if enabled.
+@@ -387,6 +379,13 @@ class LoRAFinetuneRecipeSingleDevice(FTRecipeInterface):
+         if self._device.type == "cuda":
+             memory_stats = utils.get_memory_stats(device=self._device)
+             utils.log_memory_stats(memory_stats)
++
++        # for peft lora
++        for name, module in model.named_modules():
++            if ("lora_A" in name) or ("lora_B" in name):
++                if len(list(module.children())) == 0:
++                    module.requires_grad_(True)
++
+         return model
+ 
+     def _setup_optimizer(
+@@ -571,15 +570,8 @@ class LoRAFinetuneRecipeSingleDevice(FTRecipeInterface):
+                         input_pos.to(self._device) if input_pos is not None else None
+                     )
+ 
+-                    logits = self._model(tokens, mask=mask, input_pos=input_pos)
+-                    # Shift so that tokens < n predict n
+-                    logits = logits[..., :-1, :].contiguous()
+-                    labels = labels[..., 1:].contiguous()
+-                    logits = logits.transpose(1, 2)
+-                    # Compute loss
+-                    loss = self._loss_fn(logits, labels)
+-                    # free logits otherwise it peaks backward memory
+-                    del logits
++                    # uncomment to use transformers
++                    loss = self._model(tokens, attention_mask=mask, labels=labels).loss
+ 
+                     loss = loss / self._gradient_accumulation_steps
+                     running_loss += loss
+diff --git a/torchtune/models/llama3/_component_builders.py b/torchtune/models/llama3/_component_builders.py
+index 155bb5f9..a410119f 100644
+--- a/torchtune/models/llama3/_component_builders.py
++++ b/torchtune/models/llama3/_component_builders.py
+@@ -304,10 +304,6 @@ def lora_llama3_self_attention(
+     Raises:
+         ValueError: If lora_modules arg is an empty list
+     """
+-    if not lora_modules:
+-        raise ValueError(
+-            f"Must pass one or more of {LORA_ATTN_MODULES} as lora_modules"
+-        )
+ 
+     head_dim = embed_dim // num_heads
+     num_kv_heads = num_kv_heads if num_kv_heads else num_heads

@@ -60,3 +60,25 @@ Check `compare-logs-peft-in-torchtune.ipynb`. Memory, speed, and loss are all id
 ## Conclusion
 
 Given that the PEFT LoRA implementation, when used in torchtune, is exactly as efficient as the torchtune implementation is very strong evidence that the memory deficit is not caused by PEFT itself.
+
+# Injecting transformers AutoModel and PEFT LoRA into torchtune
+
+This is the same idea as in the previous section, but instead of only patching torchtune to use PEFT for LoRA, torchtune is also patched to use transformers `AutoModelForCausalLM` with bitsandbytes.
+
+## Setup
+
+- Apply `peft-transformers.patch` to torchtune (commit ca1d7a1584f573b2dde719c4c9a0f678bff76089)
+
+The rest is the same.
+
+## Training
+
+- `tune run lora_finetune_single_device --config llama3/bb_8B_qlora_single_device.yaml`
+
+## Results
+
+Check `compare-logs-peft-transformers-in-torchtune.ipynb`. Using transformers for the base model results in more memory usage (~13GB -> ~16GB). Loss is slightly higher but follows a similar trajectory. Speed is much higher for transformers (tokens per second ~500 -> ~2700)
+
+## Conclusion
+
+Strange, is there something wrong??
