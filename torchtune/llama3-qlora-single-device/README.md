@@ -24,61 +24,18 @@
 
 - PEFT: See `train-peft.ipynb`
 - torchtune: `tune run lora_finetune_single_device --config llama3/bb_8B_qlora_single_device.yaml`
+  - Note that activation checkpointing has been disabled for torchtune. This is because it was not trivial to add it to PEFT/transformers (as I want to avoid using `Trainer`), so to keep things equal, it was disabled for both.
 
 ## Results
 
-- PEFT logs: `log_peft_bnb-0.43.3.txt`
+- PEFT logs: `log_peft.txt`
 - torchtune logs: `log_torchtune.txt`
 - Comparison notebook: `compare-logs.ipynb`
 
 ## Conclusion
 
 - Losses are very closely matched
-- Memory: torchtune much lower (<8GiB) than PEFT + bitsandbytes (~21GiB)
-- Tokens per second: torchtune much lower (465) than PEFT + bitsandbytes (1410)
+- Memory: torchtune slightly lower (~19GiB) than PEFT + bitsandbytes (~20GiB)
+- Tokens per second: torchtune much lower (~670) than PEFT + bitsandbytes (~2300), not sure why, probably some optimization in transformers (cache?)
 
-It looks like torchtune uses torchao for quantization (weight type is `torchao.dtypes.nf4tensor.NF4Tensor`), which leads to very different memory and performance profiles than bitsandbytes. The extra memory required by PEFT + bnb can be traced back to the activations -- when choosing batch size of 1 and sequence length of 32, memory comes down to ~8GiB. Further investigation required.
-
-# Injecting PEFT LoRA into torchtune
-
-In this test, torchtune QLoRA (which uses torchao NF4) is patched to use the PEFT LoRA implementation instead of the one provided by torchtune. The idea is to try to figure where the memory difference between PEFT QLoRA and torchtune QLoRA stems from.
-
-## Setup
-
-- Apply `peft.patch` to torchtune (commit ca1d7a1584f573b2dde719c4c9a0f678bff76089)
-
-The rest is the same.
-
-## Training
-
-- `tune run lora_finetune_single_device --config llama3/bb_8B_qlora_single_device.yaml`
-
-## Results
-
-Check `compare-logs-peft-in-torchtune.ipynb`. Memory, speed, and loss are all identical.
-
-## Conclusion
-
-Given that the PEFT LoRA implementation, when used in torchtune, is exactly as efficient as the torchtune implementation is very strong evidence that the memory deficit is not caused by PEFT itself.
-
-# Injecting transformers AutoModel and PEFT LoRA into torchtune
-
-This is the same idea as in the previous section, but instead of only patching torchtune to use PEFT for LoRA, torchtune is also patched to use transformers `AutoModelForCausalLM` with bitsandbytes.
-
-## Setup
-
-- Apply `peft-transformers.patch` to torchtune (commit ca1d7a1584f573b2dde719c4c9a0f678bff76089)
-
-The rest is the same.
-
-## Training
-
-- `tune run lora_finetune_single_device --config llama3/bb_8B_qlora_single_device.yaml`
-
-## Results
-
-Check `compare-logs-peft-transformers-in-torchtune.ipynb`. Using transformers for the base model results in more memory usage (~13GB -> ~16GB). Loss is slightly higher but follows a similar trajectory. Speed is much higher for transformers (tokens per second ~500 -> ~2700)
-
-## Conclusion
-
-Strange, is there something wrong??
+Note that torchtune uses torchao NF4 for quantization (weight type is `torchao.dtypes.nf4tensor.NF4Tensor`), whereas PEFT uses bitsandbytes.
